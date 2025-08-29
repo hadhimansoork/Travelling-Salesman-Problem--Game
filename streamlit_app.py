@@ -12,7 +12,7 @@ st.set_page_config(page_title="TSP Game", layout="wide")
 page_bg_img = """
 <style>
 [data-testid="stAppViewContainer"] {
-    background-image: url("https://images.unsplash.com/photo-1506744038136-46273834b3fb");
+    background-image: url("https://images.unsplash.com/photo-1507525428034-b723cf961d3e");
     background-size: cover;
     background-repeat: no-repeat;
     background-attachment: fixed;
