@@ -159,8 +159,8 @@ def visualize_game_graph(graph, current_path=None, highlight_available=None, tit
 # ---------------------------
 # TSP Algorithms
 # ---------------------------
-def bfs_tsp_corrected(graph, start):
-    """Corrected Breadth-First Search for TSP with pruning"""
+def bfs_tsp(graph, start):
+    """Breadth-First Search for TSP with pruning"""
     queue = deque([(start, [start], 0)])
     best_path, best_cost = None, float('inf')
     nodes_explored = 0
@@ -188,8 +188,8 @@ def bfs_tsp_corrected(graph, start):
     
     return best_path, best_cost, nodes_explored
 
-def dfs_tsp_corrected(graph, start):
-    """Corrected Depth-First Search for TSP with pruning"""
+def dfs_tsp(graph, start):
+    """Depth-First Search for TSP with pruning"""
     stack = [(start, [start], 0)]
     best_path, best_cost = None, float('inf')
     nodes_explored = 0
@@ -217,8 +217,8 @@ def dfs_tsp_corrected(graph, start):
     
     return best_path, best_cost, nodes_explored
 
-def ucs_tsp_corrected(graph, start):
-    """Corrected Uniform Cost Search for TSP"""
+def ucs_tsp(graph, start):
+    """Uniform Cost Search for TSP with pruning"""
     pq = [(0, start, [start])]
     best_path, best_cost = None, float('inf')
     nodes_explored = 0
@@ -253,8 +253,8 @@ def ucs_tsp_corrected(graph, start):
     
     return best_path, best_cost, nodes_explored
 
-def improved_heuristic_tsp(graph, path, start):
-    """Improved heuristic function for A*"""
+def heuristic_tsp(graph, path, start):
+    """Improved heuristic function for A* - minimum cost to complete tour"""
     remaining = set(graph.nodes) - set(path)
     if not remaining:
         if graph.has_edge(path[-1], start):
@@ -264,8 +264,7 @@ def improved_heuristic_tsp(graph, path, start):
     
     current = path[-1]
     
-    # More sophisticated heuristic: MST of remaining cities + connection costs
-    # For simplicity, using minimum edge to remaining + minimum return cost
+    # More sophisticated heuristic: minimum edge to remaining + minimum return cost
     min_to_remaining = float('inf')
     min_return_cost = float('inf')
     
@@ -287,8 +286,8 @@ def improved_heuristic_tsp(graph, path, start):
     
     return heuristic
 
-def astar_tsp_corrected(graph, start):
-    """Corrected A* Search for TSP"""
+def astar_tsp(graph, start):
+    """A* Search for TSP with proper g-cost tracking"""
     pq = [(0, 0, start, [start])]  # (f_cost, g_cost, city, path)
     best_path, best_cost = None, float('inf')
     nodes_explored = 0
@@ -298,7 +297,7 @@ def astar_tsp_corrected(graph, start):
         f_cost, g_cost, city, path = heapq.heappop(pq)
         nodes_explored += 1
         
-        # State management
+        # State management to avoid revisiting worse states
         state_key = (city, tuple(sorted(path)))
         if state_key in visited_states and visited_states[state_key] <= g_cost:
             continue
@@ -318,7 +317,7 @@ def astar_tsp_corrected(graph, start):
                 if neighbor not in path:
                     new_g_cost = g_cost + graph[city][neighbor]['weight']
                     new_path = path + [neighbor]
-                    h_cost = improved_heuristic_tsp(graph, new_path, start)
+                    h_cost = heuristic_tsp(graph, new_path, start)
                     new_f_cost = new_g_cost + h_cost
                     
                     # Only add if promising
@@ -327,15 +326,15 @@ def astar_tsp_corrected(graph, start):
     
     return best_path, best_cost, nodes_explored
 
-def run_algorithm_corrected(graph, start_city, algorithm_name):
-    """Corrected version with proper import and error handling"""
+def run_algorithm(graph, start_city, algorithm_name):
+    """Run the specified algorithm and return results with timing"""
     start_time = time.time()
     
     algorithms = {
-        "BFS": bfs_tsp_corrected,
-        "DFS": dfs_tsp_corrected,
-        "UCS": ucs_tsp_corrected,
-        "A*": astar_tsp_corrected
+        "BFS": bfs_tsp,
+        "DFS": dfs_tsp,
+        "UCS": ucs_tsp,
+        "A*": astar_tsp
     }
     
     if algorithm_name not in algorithms:
