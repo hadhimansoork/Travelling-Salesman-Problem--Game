@@ -157,9 +157,8 @@ def visualize_game_graph(graph, current_path=None, highlight_available=None, tit
 # ---------------------------
 # TSP Algorithms
 # ---------------------------
-def bfs_tsp(graph, start):
-    """Breadth-First Search for TSP"""
-    from collections import deque
+def bfs_tsp_corrected(graph, start):
+    """Corrected Breadth-First Search for TSP with pruning"""
     queue = deque([(start, [start], 0)])
     best_path, best_cost = None, float('inf')
     nodes_explored = 0
@@ -168,6 +167,10 @@ def bfs_tsp(graph, start):
         city, path, cost = queue.popleft()
         nodes_explored += 1
         
+        # Pruning: if current cost exceeds best, skip
+        if cost >= best_cost:
+            continue
+        
         if len(path) == len(graph.nodes):
             if graph.has_edge(path[-1], start):
                 total_cost = cost + graph[path[-1]][start]['weight']
@@ -177,12 +180,14 @@ def bfs_tsp(graph, start):
             for neighbor in graph.neighbors(city):
                 if neighbor not in path:
                     new_cost = cost + graph[city][neighbor]['weight']
-                    queue.append((neighbor, path + [neighbor], new_cost))
+                    # Only add if promising
+                    if new_cost < best_cost:
+                        queue.append((neighbor, path + [neighbor], new_cost))
     
     return best_path, best_cost, nodes_explored
 
-def dfs_tsp(graph, start):
-    """Depth-First Search for TSP"""
+def dfs_tsp_corrected(graph, start):
+    """Corrected Depth-First Search for TSP with pruning"""
     stack = [(start, [start], 0)]
     best_path, best_cost = None, float('inf')
     nodes_explored = 0
@@ -191,29 +196,9 @@ def dfs_tsp(graph, start):
         city, path, cost = stack.pop()
         nodes_explored += 1
         
-        if len(path) == len(graph.nodes):
-            if graph.has_edge(path[-1], start):
-                total_cost = cost + graph[path[-1]][start]['weight']
-                if total_cost < best_cost:
-                    best_path, best_cost = path + [start], total_cost
-        else:
-            for neighbor in graph.neighbors(city):
-                if neighbor not in path:
-                    new_cost = cost + graph[city][neighbor]['weight']
-                    stack.append((neighbor, path + [neighbor], new_cost))
-    
-    return best_path, best_cost, nodes_explored
-
-def ucs_tsp(graph, start):
-    """Uniform Cost Search for TSP"""
-    import heapq
-    pq = [(0, start, [start])]
-    best_path, best_cost = None, float('inf')
-    nodes_explored = 0
-    
-    while pq:
-        cost, city, path = heapq.heappop(pq)
-        nodes_explored += 1
+        # Pruning: if current cost exceeds best, skip
+        if cost >= best_cost:
+            continue
         
         if len(path) == len(graph.nodes):
             if graph.has_edge(path[-1], start):
@@ -224,12 +209,50 @@ def ucs_tsp(graph, start):
             for neighbor in graph.neighbors(city):
                 if neighbor not in path:
                     new_cost = cost + graph[city][neighbor]['weight']
-                    heapq.heappush(pq, (new_cost, neighbor, path + [neighbor]))
+                    # Only add if promising
+                    if new_cost < best_cost:
+                        stack.append((neighbor, path + [neighbor], new_cost))
     
     return best_path, best_cost, nodes_explored
 
-def heuristic_tsp(graph, path, start):
-    """Heuristic function for A* - minimum cost to complete tour"""
+def ucs_tsp_corrected(graph, start):
+    """Corrected Uniform Cost Search for TSP"""
+    pq = [(0, start, [start])]
+    best_path, best_cost = None, float('inf')
+    nodes_explored = 0
+    visited_states = set()  # To avoid revisiting same state
+    
+    while pq:
+        cost, city, path = heapq.heappop(pq)
+        nodes_explored += 1
+        
+        # Create state key for visited check
+        state_key = (city, tuple(sorted(path)))
+        if state_key in visited_states:
+            continue
+        visited_states.add(state_key)
+        
+        # Pruning: if current cost exceeds best, skip
+        if cost >= best_cost:
+            continue
+        
+        if len(path) == len(graph.nodes):
+            if graph.has_edge(path[-1], start):
+                total_cost = cost + graph[path[-1]][start]['weight']
+                if total_cost < best_cost:
+                    best_path, best_cost = path + [start], total_cost
+        else:
+            for neighbor in graph.neighbors(city):
+                if neighbor not in path:
+                    new_cost = cost + graph[city][neighbor]['weight']
+                    # Only add if promising
+                    if new_cost < best_cost:
+                        heapq.heappush(pq, (new_cost, neighbor, path + [neighbor]))
+    
+    return best_path, best_cost, nodes_explored
+
+def improved_heuristic_tsp(graph, path, start):
+    """Improved heuristic function for A*"""
     remaining = set(graph.nodes) - set(path)
     if not remaining:
         if graph.has_edge(path[-1], start):
@@ -237,66 +260,91 @@ def heuristic_tsp(graph, path, start):
         else:
             return float('inf')
     
-    # Simple heuristic: minimum edge from current city to any remaining city
     current = path[-1]
-    min_cost = float('inf')
+    
+    # More sophisticated heuristic: MST of remaining cities + connection costs
+    # For simplicity, using minimum edge to remaining + minimum return cost
+    min_to_remaining = float('inf')
+    min_return_cost = float('inf')
+    
+    # Minimum cost from current to any remaining city
     for city in remaining:
         if graph.has_edge(current, city):
-            min_cost = min(min_cost, graph[current][city]['weight'])
+            min_to_remaining = min(min_to_remaining, graph[current][city]['weight'])
     
-    return min_cost if min_cost != float('inf') else 0
+    # Minimum cost from any remaining city back to start
+    for city in remaining:
+        if graph.has_edge(city, start):
+            min_return_cost = min(min_return_cost, graph[city][start]['weight'])
+    
+    heuristic = 0
+    if min_to_remaining != float('inf'):
+        heuristic += min_to_remaining
+    if min_return_cost != float('inf') and len(remaining) > 1:
+        heuristic += min_return_cost
+    
+    return heuristic
 
-def astar_tsp(graph, start):
-    """A* Search for TSP"""
-    import heapq
-    pq = [(0, start, [start])]
+def astar_tsp_corrected(graph, start):
+    """Corrected A* Search for TSP"""
+    pq = [(0, 0, start, [start])]  # (f_cost, g_cost, city, path)
     best_path, best_cost = None, float('inf')
     nodes_explored = 0
+    visited_states = {}  # state -> best_g_cost
     
     while pq:
-        f_cost, city, path = heapq.heappop(pq)
+        f_cost, g_cost, city, path = heapq.heappop(pq)
         nodes_explored += 1
         
-        # Calculate actual cost so far
-        actual_cost = 0
-        for i in range(len(path) - 1):
-            actual_cost += graph[path[i]][path[i+1]]['weight']
+        # State management
+        state_key = (city, tuple(sorted(path)))
+        if state_key in visited_states and visited_states[state_key] <= g_cost:
+            continue
+        visited_states[state_key] = g_cost
+        
+        # Pruning: if current cost exceeds best, skip
+        if g_cost >= best_cost:
+            continue
         
         if len(path) == len(graph.nodes):
             if graph.has_edge(path[-1], start):
-                total_cost = actual_cost + graph[path[-1]][start]['weight']
+                total_cost = g_cost + graph[path[-1]][start]['weight']
                 if total_cost < best_cost:
                     best_path, best_cost = path + [start], total_cost
         else:
             for neighbor in graph.neighbors(city):
                 if neighbor not in path:
-                    g_cost = actual_cost + graph[city][neighbor]['weight']
-                    h_cost = heuristic_tsp(graph, path + [neighbor], start)
-                    f_cost = g_cost + h_cost
-                    heapq.heappush(pq, (f_cost, neighbor, path + [neighbor]))
+                    new_g_cost = g_cost + graph[city][neighbor]['weight']
+                    new_path = path + [neighbor]
+                    h_cost = improved_heuristic_tsp(graph, new_path, start)
+                    new_f_cost = new_g_cost + h_cost
+                    
+                    # Only add if promising
+                    if new_g_cost < best_cost:
+                        heapq.heappush(pq, (new_f_cost, new_g_cost, neighbor, new_path))
     
     return best_path, best_cost, nodes_explored
 
-def run_algorithm(graph, start_city, algorithm_name):
-    """Run the specified algorithm and return results with timing"""
+def run_algorithm_corrected(graph, start_city, algorithm_name):
+    """Corrected version with proper import and error handling"""
     start_time = time.time()
     
-    if algorithm_name == "BFS":
-        path, cost, nodes = bfs_tsp(graph, start_city)
-    elif algorithm_name == "DFS":
-        path, cost, nodes = dfs_tsp(graph, start_city)
-    elif algorithm_name == "UCS":
-        path, cost, nodes = ucs_tsp(graph, start_city)
-    elif algorithm_name == "A*":
-        path, cost, nodes = astar_tsp(graph, start_city)
-    else:
+    algorithms = {
+        "BFS": bfs_tsp_corrected,
+        "DFS": dfs_tsp_corrected,
+        "UCS": ucs_tsp_corrected,
+        "A*": astar_tsp_corrected
+    }
+    
+    if algorithm_name not in algorithms:
         return None, float('inf'), 0, 0
+    
+    path, cost, nodes = algorithms[algorithm_name](graph, start_city)
     
     end_time = time.time()
     execution_time = end_time - start_time
     
     return path, cost, nodes, execution_time
-
 # ---------------------------
 # Game Logic
 # ---------------------------
