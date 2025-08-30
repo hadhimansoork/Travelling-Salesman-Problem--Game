@@ -373,7 +373,7 @@ def move_to_city(city):
 
 if st.session_state.page == 1:
     # Welcome Page
-    st.title("🌍 TSP Adventure Game")
+    st.title("Travelling Salesman Game")
     st.markdown("""
     ### Welcome, Travel Planner! ✈️
     
