@@ -3,6 +3,8 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import time
 import random
+import heapq
+from collections import deque
 
 # ---------------------------
 # Page Config & Custom CSS
