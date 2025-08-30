@@ -281,7 +281,7 @@ def ucs_tsp(graph, start):
     
     return best_path, best_cost, nodes_explored
 
-def improved_heuristic_tsp(graph, path, start):
+def heuristic_tsp(graph, path, start):
     """Improved admissible heuristic for A*"""
     remaining_cities = set(graph.nodes) - set(path)
     
@@ -390,7 +390,7 @@ def astar_tsp(graph, start):
     
     return best_path, best_cost, nodes_explored
 
-def run_algorithm_fixed(graph, start_city, algorithm_name):
+def run_algorithm(graph, start_city, algorithm_name):
     """Run the fixed algorithm and return results with timing"""
     start_time = time.time()
     
