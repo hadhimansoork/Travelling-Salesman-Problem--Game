@@ -159,37 +159,50 @@ def visualize_game_graph(graph, current_path=None, highlight_available=None, tit
 # ---------------------------
 # TSP Algorithms
 # ---------------------------
+# Fixed TSP Algorithms with proper implementations
+
+import heapq
+from collections import deque
+import time
+
 def bfs_tsp(graph, start):
-    """Breadth-First Search for TSP with pruning"""
+    """Fixed Breadth-First Search for TSP"""
+    # BFS should explore complete tours, not partial paths
+    # Queue stores: (current_city, path, cost)
     queue = deque([(start, [start], 0)])
     best_path, best_cost = None, float('inf')
     nodes_explored = 0
+    visited_complete_states = set()  # To avoid duplicate complete path checks
     
     while queue:
         city, path, cost = queue.popleft()
         nodes_explored += 1
         
-        # Pruning: if current cost exceeds best, skip
+        # Early pruning - if current cost already exceeds best, skip
         if cost >= best_cost:
             continue
         
+        # Check if we have visited all cities
         if len(path) == len(graph.nodes):
-            if graph.has_edge(path[-1], start):
-                total_cost = cost + graph[path[-1]][start]['weight']
+            # Try to return to start
+            if graph.has_edge(city, start):
+                total_cost = cost + graph[city][start]['weight']
                 if total_cost < best_cost:
-                    best_path, best_cost = path + [start], total_cost
+                    best_path = path + [start]
+                    best_cost = total_cost
         else:
+            # Continue exploring - add all unvisited neighbors
             for neighbor in graph.neighbors(city):
-                if neighbor not in path:
+                if neighbor not in path:  # Avoid cycles
                     new_cost = cost + graph[city][neighbor]['weight']
-                    # Only add if promising
-                    if new_cost < best_cost:
+                    if new_cost < best_cost:  # Only add promising paths
                         queue.append((neighbor, path + [neighbor], new_cost))
     
     return best_path, best_cost, nodes_explored
 
 def dfs_tsp(graph, start):
-    """Depth-First Search for TSP with pruning"""
+    """Fixed Depth-First Search for TSP"""
+    # Use explicit stack instead of recursion to avoid stack overflow
     stack = [(start, [start], 0)]
     best_path, best_cost = None, float('inf')
     nodes_explored = 0
@@ -198,136 +211,187 @@ def dfs_tsp(graph, start):
         city, path, cost = stack.pop()
         nodes_explored += 1
         
-        # Pruning: if current cost exceeds best, skip
+        # Early pruning
         if cost >= best_cost:
             continue
         
+        # Check if tour is complete
         if len(path) == len(graph.nodes):
-            if graph.has_edge(path[-1], start):
-                total_cost = cost + graph[path[-1]][start]['weight']
+            if graph.has_edge(city, start):
+                total_cost = cost + graph[city][start]['weight']
                 if total_cost < best_cost:
-                    best_path, best_cost = path + [start], total_cost
+                    best_path = path + [start]
+                    best_cost = total_cost
         else:
-            for neighbor in graph.neighbors(city):
+            # Add unvisited neighbors to stack
+            # Note: Adding in reverse order for consistent behavior
+            neighbors = list(graph.neighbors(city))
+            for neighbor in reversed(neighbors):
                 if neighbor not in path:
                     new_cost = cost + graph[city][neighbor]['weight']
-                    # Only add if promising
                     if new_cost < best_cost:
                         stack.append((neighbor, path + [neighbor], new_cost))
     
     return best_path, best_cost, nodes_explored
 
 def ucs_tsp(graph, start):
-    """Uniform Cost Search for TSP with pruning"""
-    pq = [(0, start, [start])]
+    """Fixed Uniform Cost Search for TSP"""
+    # Priority queue: (cost, unique_id, city, path)
+    # Adding unique_id to handle cases where costs are equal
+    pq = [(0, 0, start, [start])]
     best_path, best_cost = None, float('inf')
     nodes_explored = 0
-    visited_states = set()  # To avoid revisiting same state
+    unique_id = 0
+    
+    # Track visited states to avoid processing same state multiple times
+    # State = (current_city, frozenset of visited cities)
+    visited_states = {}
     
     while pq:
-        cost, city, path = heapq.heappop(pq)
+        cost, _, city, path = heapq.heappop(pq)
         nodes_explored += 1
         
-        # Create state key for visited check
-        state_key = (city, tuple(sorted(path)))
-        if state_key in visited_states:
-            continue
-        visited_states.add(state_key)
+        # Create state key for duplicate detection
+        state_key = (city, frozenset(path))
         
-        # Pruning: if current cost exceeds best, skip
+        # Skip if we've seen this state with better or equal cost
+        if state_key in visited_states and visited_states[state_key] <= cost:
+            continue
+        visited_states[state_key] = cost
+        
+        # Early pruning
         if cost >= best_cost:
             continue
         
+        # Check if tour is complete
         if len(path) == len(graph.nodes):
-            if graph.has_edge(path[-1], start):
-                total_cost = cost + graph[path[-1]][start]['weight']
+            if graph.has_edge(city, start):
+                total_cost = cost + graph[city][start]['weight']
                 if total_cost < best_cost:
-                    best_path, best_cost = path + [start], total_cost
+                    best_path = path + [start]
+                    best_cost = total_cost
         else:
+            # Add unvisited neighbors
             for neighbor in graph.neighbors(city):
                 if neighbor not in path:
                     new_cost = cost + graph[city][neighbor]['weight']
-                    # Only add if promising
                     if new_cost < best_cost:
-                        heapq.heappush(pq, (new_cost, neighbor, path + [neighbor]))
+                        unique_id += 1
+                        heapq.heappush(pq, (new_cost, unique_id, neighbor, path + [neighbor]))
     
     return best_path, best_cost, nodes_explored
 
-def heuristic_tsp(graph, path, start):
-    """Improved heuristic function for A* - minimum cost to complete tour"""
-    remaining = set(graph.nodes) - set(path)
-    if not remaining:
-        if graph.has_edge(path[-1], start):
-            return graph[path[-1]][start]['weight']
+def improved_heuristic_tsp(graph, path, start):
+    """Improved admissible heuristic for A*"""
+    remaining_cities = set(graph.nodes) - set(path)
+    
+    if not remaining_cities:
+        # All cities visited, need to return to start
+        current_city = path[-1]
+        if graph.has_edge(current_city, start):
+            return graph[current_city][start]['weight']
         else:
-            return float('inf')
+            return float('inf')  # Invalid state
     
-    current = path[-1]
+    current_city = path[-1]
     
-    # More sophisticated heuristic: minimum edge to remaining + minimum return cost
-    min_to_remaining = float('inf')
+    # Minimum spanning tree heuristic for remaining cities + connections
+    # This is admissible (never overestimates) and more informed than simple minimum edge
+    
+    # Find minimum cost to connect to any remaining city
+    min_connection_cost = float('inf')
+    for city in remaining_cities:
+        if graph.has_edge(current_city, city):
+            min_connection_cost = min(min_connection_cost, graph[current_city][city]['weight'])
+    
+    # Find minimum cost to return from any remaining city to start
     min_return_cost = float('inf')
-    
-    # Minimum cost from current to any remaining city
-    for city in remaining:
-        if graph.has_edge(current, city):
-            min_to_remaining = min(min_to_remaining, graph[current][city]['weight'])
-    
-    # Minimum cost from any remaining city back to start
-    for city in remaining:
+    for city in remaining_cities:
         if graph.has_edge(city, start):
             min_return_cost = min(min_return_cost, graph[city][start]['weight'])
     
+    # Minimum cost edges between remaining cities (simplified MST approximation)
+    min_internal_cost = 0
+    if len(remaining_cities) > 1:
+        # Find minimum edge weight among remaining cities
+        min_edge = float('inf')
+        remaining_list = list(remaining_cities)
+        for i in range(len(remaining_list)):
+            for j in range(i + 1, len(remaining_list)):
+                city1, city2 = remaining_list[i], remaining_list[j]
+                if graph.has_edge(city1, city2):
+                    min_edge = min(min_edge, graph[city1][city2]['weight'])
+        
+        if min_edge != float('inf'):
+            # Approximate cost of connecting remaining cities
+            min_internal_cost = min_edge * (len(remaining_cities) - 1)
+    
+    # Total heuristic: connection + internal + return
     heuristic = 0
-    if min_to_remaining != float('inf'):
-        heuristic += min_to_remaining
-    if min_return_cost != float('inf') and len(remaining) > 1:
+    if min_connection_cost != float('inf'):
+        heuristic += min_connection_cost
+    if min_return_cost != float('inf'):
         heuristic += min_return_cost
+    
+    # Add internal cost only if there are multiple remaining cities
+    if len(remaining_cities) > 1:
+        heuristic += min_internal_cost
     
     return heuristic
 
 def astar_tsp(graph, start):
-    """A* Search for TSP with proper g-cost tracking"""
-    pq = [(0, 0, start, [start])]  # (f_cost, g_cost, city, path)
+    """Fixed A* Search for TSP with proper heuristic"""
+    # Priority queue: (f_cost, unique_id, g_cost, city, path)
+    pq = [(0, 0, 0, start, [start])]
     best_path, best_cost = None, float('inf')
     nodes_explored = 0
-    visited_states = {}  # state -> best_g_cost
+    unique_id = 0
+    
+    # Track best g-cost for each state
+    visited_states = {}
     
     while pq:
-        f_cost, g_cost, city, path = heapq.heappop(pq)
+        f_cost, _, g_cost, city, path = heapq.heappop(pq)
         nodes_explored += 1
         
-        # State management to avoid revisiting worse states
-        state_key = (city, tuple(sorted(path)))
+        # Create state key
+        state_key = (city, frozenset(path))
+        
+        # Skip if we've reached this state with better cost
         if state_key in visited_states and visited_states[state_key] <= g_cost:
             continue
         visited_states[state_key] = g_cost
         
-        # Pruning: if current cost exceeds best, skip
+        # Early pruning
         if g_cost >= best_cost:
             continue
         
+        # Check if tour is complete
         if len(path) == len(graph.nodes):
-            if graph.has_edge(path[-1], start):
-                total_cost = g_cost + graph[path[-1]][start]['weight']
+            if graph.has_edge(city, start):
+                total_cost = g_cost + graph[city][start]['weight']
                 if total_cost < best_cost:
-                    best_path, best_cost = path + [start], total_cost
+                    best_path = path + [start]
+                    best_cost = total_cost
         else:
+            # Explore neighbors
             for neighbor in graph.neighbors(city):
                 if neighbor not in path:
                     new_g_cost = g_cost + graph[city][neighbor]['weight']
-                    new_path = path + [neighbor]
-                    h_cost = heuristic_tsp(graph, new_path, start)
-                    new_f_cost = new_g_cost + h_cost
                     
-                    # Only add if promising
+                    # Only proceed if promising
                     if new_g_cost < best_cost:
-                        heapq.heappush(pq, (new_f_cost, new_g_cost, neighbor, new_path))
+                        new_path = path + [neighbor]
+                        h_cost = improved_heuristic_tsp(graph, new_path, start)
+                        new_f_cost = new_g_cost + h_cost
+                        
+                        unique_id += 1
+                        heapq.heappush(pq, (new_f_cost, unique_id, new_g_cost, neighbor, new_path))
     
     return best_path, best_cost, nodes_explored
 
-def run_algorithm(graph, start_city, algorithm_name):
-    """Run the specified algorithm and return results with timing"""
+def run_algorithm_fixed(graph, start_city, algorithm_name):
+    """Run the fixed algorithm and return results with timing"""
     start_time = time.time()
     
     algorithms = {
@@ -340,13 +404,35 @@ def run_algorithm(graph, start_city, algorithm_name):
     if algorithm_name not in algorithms:
         return None, float('inf'), 0, 0
     
-    path, cost, nodes = algorithms[algorithm_name](graph, start_city)
+    try:
+        path, cost, nodes = algorithms[algorithm_name](graph, start_city)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        return path, cost, nodes, execution_time
+    except Exception as e:
+        print(f"Error in {algorithm_name}: {e}")
+        return None, float('inf'), 0, 0
+
+# Additional helper function for testing
+def validate_tsp_solution(graph, path, start_city):
+    """Validate that a TSP solution is correct"""
+    if not path:
+        return False, "Empty path"
     
-    end_time = time.time()
-    execution_time = end_time - start_time
+    if path[0] != start_city or path[-1] != start_city:
+        return False, "Path doesn't start and end at start city"
     
-    return path, cost, nodes, execution_time
-# ---------------------------
+    if len(set(path[:-1])) != len(graph.nodes):
+        return False, "Path doesn't visit all cities exactly once"
+    
+    # Check all edges exist
+    total_cost = 0
+    for i in range(len(path) - 1):
+        if not graph.has_edge(path[i], path[i+1]):
+            return False, f"No edge between {path[i]} and {path[i+1]}"
+        total_cost += graph[path[i]][path[i+1]]['weight']
+    
+    return True, total_cost# ---------------------------
 # Game Logic
 # ---------------------------
 def calculate_optimal_solution(graph, start_city):
